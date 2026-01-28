@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ApolloClient, InMemoryCache, gql } from '@apollo/client';
 import { ApolloProvider, useQuery, useMutation } from '@apollo/client/react';
-import { createAuthLink } from 'aws-appsync-auth-link';
+import { createAuthLink, AuthOptions } from 'aws-appsync-auth-link';
 import { createSubscriptionHandshakeLink } from 'aws-appsync-subscription-link';
 import { ApolloLink } from '@apollo/client';
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -76,8 +76,8 @@ const createApolloClient = async () => {
   const url = awsconfig.aws_appsync_graphqlEndpoint;
   const region = awsconfig.aws_appsync_region;
 
-  const auth = {
-    type: awsconfig.aws_appsync_authenticationType as any,
+  const auth: AuthOptions = {
+    type: 'AMAZON_COGNITO_USER_POOLS',
     jwtToken: async () => {
       const session = await fetchAuthSession();
       return session.tokens?.idToken?.toString() || '';
@@ -294,7 +294,7 @@ function ContentList() {
 
 // Main Component with Apollo Provider
 export default function ContentManager() {
-  const [client, setClient] = useState<any>(null);
+  const [client, setClient] = useState<typeof ApolloClient.prototype | null>(null);
 
   useEffect(() => {
     createApolloClient().then(setClient);

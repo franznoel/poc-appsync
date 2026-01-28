@@ -9,6 +9,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { CfnOutput, RemovalPolicy } from 'aws-cdk-lib';
+import * as path from 'path';
 
 export interface AppsyncPocStackProps extends cdk.StackProps {
   environment: string;
@@ -71,7 +72,7 @@ export class CdkStack extends cdk.Stack {
     // AppSync API
     const api = new appsync.GraphqlApi(this, 'Api', {
       name: `appsync-poc-api-${environment}`,
-      schema: appsync.SchemaFile.fromAsset('./graphql/schema.graphql'),
+      schema: appsync.SchemaFile.fromAsset(path.join(__dirname, '../graphql/schema.graphql')),
       authorizationConfig: {
         defaultAuthorization: {
           authorizationType: appsync.AuthorizationType.USER_POOL,
@@ -83,7 +84,9 @@ export class CdkStack extends cdk.Stack {
           {
             authorizationType: appsync.AuthorizationType.API_KEY,
             apiKeyConfig: {
-              expires: cdk.Expiration.after(cdk.Duration.days(365)),
+              expires: cdk.Expiration.after(
+                environment === 'prod' ? cdk.Duration.days(90) : cdk.Duration.days(365)
+              ),
             },
           },
         ],
@@ -179,6 +182,12 @@ export class CdkStack extends cdk.Stack {
               ":content": $util.dynamodb.toDynamoDBJson($ctx.args.input.content),
               ":updatedAt": $util.dynamodb.toDynamoDBJson($util.time.nowISO8601())
             }
+          },
+          "condition": {
+            "expression": "createdBy = :username",
+            "expressionValues": {
+              ":username": $util.dynamodb.toDynamoDBJson($ctx.identity.username)
+            }
           }
         }
       `),
@@ -195,6 +204,12 @@ export class CdkStack extends cdk.Stack {
           "key": {
             "PK": $util.dynamodb.toDynamoDBJson($ctx.args.id),
             "SK": $util.dynamodb.toDynamoDBJson($ctx.args.id)
+          },
+          "condition": {
+            "expression": "createdBy = :username",
+            "expressionValues": {
+              ":username": $util.dynamodb.toDynamoDBJson($ctx.identity.username)
+            }
           }
         }
       `),
