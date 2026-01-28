@@ -1,0 +1,122 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # For OIDC if using assume role
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            cdk/package-lock.json
+            frontend/package-lock.json
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "ENVIRONMENT=stage" >> $GITHUB_OUTPUT
+          else
+            echo "ENVIRONMENT=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install CDK dependencies
+        working-directory: ./cdk
+        run: npm ci
+
+      - name: Build CDK
+        working-directory: ./cdk
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Deploy CDK Stack
+        working-directory: ./cdk
+        run: |
+          npx cdk deploy --require-approval never --context environment=${{ steps.env.outputs.ENVIRONMENT }}
+          
+      - name: Get Stack Outputs
+        id: stack-outputs
+        working-directory: ./cdk
+        run: |
+          STACK_NAME="AppsyncPocStack-${{ steps.env.outputs.ENVIRONMENT }}"
+          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          GRAPHQL_URL=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiUrl'].OutputValue" --output text)
+          API_KEY=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='GraphQLApiKey'].OutputValue" --output text)
+          REGION=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='Region'].OutputValue" --output text)
+          BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text)
+          DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+          
+          echo "USER_POOL_ID=$USER_POOL_ID" >> $GITHUB_OUTPUT
+          echo "USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "GRAPHQL_URL=$GRAPHQL_URL" >> $GITHUB_OUTPUT
+          echo "API_KEY=$API_KEY" >> $GITHUB_OUTPUT
+          echo "REGION=$REGION" >> $GITHUB_OUTPUT
+          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_OUTPUT
+          echo "DISTRIBUTION_ID=$DISTRIBUTION_ID" >> $GITHUB_OUTPUT
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build React app
+        working-directory: ./frontend
+        env:
+          REACT_APP_AWS_REGION: ${{ steps.stack-outputs.outputs.REGION }}
+          REACT_APP_USER_POOL_ID: ${{ steps.stack-outputs.outputs.USER_POOL_ID }}
+          REACT_APP_USER_POOL_CLIENT_ID: ${{ steps.stack-outputs.outputs.USER_POOL_CLIENT_ID }}
+          REACT_APP_GRAPHQL_URL: ${{ steps.stack-outputs.outputs.GRAPHQL_URL }}
+          REACT_APP_API_KEY: ${{ steps.stack-outputs.outputs.API_KEY }}
+        run: npm run build
+
+      - name: Deploy to S3
+        working-directory: ./frontend
+        run: |
+          aws s3 sync build/ s3://${{ steps.stack-outputs.outputs.BUCKET_NAME }} --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ steps.stack-outputs.outputs.DISTRIBUTION_ID }} --paths "/*"
+
+      - name: Print deployment info
+        run: |
+          echo "Deployment completed successfully!"
+          echo "Environment: ${{ steps.env.outputs.ENVIRONMENT }}"
+          echo "User Pool ID: ${{ steps.stack-outputs.outputs.USER_POOL_ID }}"
+          echo "GraphQL URL: ${{ steps.stack-outputs.outputs.GRAPHQL_URL }}"

@@ -1,0 +1,52 @@
+.App {
+  min-height: 100vh;
+  background-color: #f0f2f5;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.App-header h1 {
+  margin: 0 0 15px 0;
+  font-size: 28px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-size: 14px;
+}
+
+.sign-out-btn {
+  padding: 8px 16px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.sign-out-btn:hover {
+  background-color: #c82333;
+}
+
+.App-main {
+  padding: 20px;
+  min-height: calc(100vh - 120px);
+}
+
+/* Amplify UI customization */
+[data-amplify-authenticator] {
+  --amplify-colors-brand-primary-10: #e6f2ff;
+  --amplify-colors-brand-primary-80: #007bff;
+  --amplify-colors-brand-primary-90: #0056b3;
+  --amplify-colors-brand-primary-100: #004085;
+}
+
