@@ -1,0 +1,34 @@
+{
+  "name": "poc-appsync",
+  "version": "1.0.0",
+  "description": "AppSync POC Application with CDK and React",
+  "scripts": {
+    "setup:local": "bash scripts/setup-local.sh",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:dev": "bash scripts/deploy.sh dev",
+    "deploy:stage": "bash scripts/deploy.sh stage",
+    "deploy:prod": "bash scripts/deploy.sh prod",
+    "cdk:build": "cd cdk && npm run build",
+    "cdk:synth": "cd cdk && npm run cdk synth",
+    "cdk:deploy": "cd cdk && npm run cdk deploy",
+    "frontend:start": "cd frontend && npm start",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:test": "cd frontend && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/franznoel/poc-appsync.git"
+  },
+  "keywords": [
+    "aws",
+    "cdk",
+    "appsync",
+    "cognito",
+    "dynamodb",
+    "react",
+    "typescript",
+    "serverless"
+  ],
+  "author": "",
+  "license": "MIT"
+}
